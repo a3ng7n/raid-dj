@@ -1,6 +1,8 @@
 from pygtail import Pygtail
 import time
 import os
+import sys
+import itertools
 import discord
 import asyncio
 import time
@@ -15,7 +17,7 @@ try:
         raid_dj_defaults.channel_id = int(input('Your raid dj needs channel id to join: '))
 
     if not hasattr(raid_dj_defaults, 'log_loc') or not raid_dj_defaults.log_loc:
-        raid_dj_defaults.log_loc = input('Your raid dj needs a log file location (no need for quotes): ')
+        raid_dj_defaults.log_loc = input('Your raid dj needs path/to/WoWCombatLog.txt (no need for quotes): ')
     
     if not hasattr(raid_dj_defaults, 'command') or not raid_dj_defaults.command:
         raid_dj_defaults.command = input('Your raid dj needs a command message to resume audio playback: ')
@@ -31,7 +33,7 @@ try:
 except ImportError:
     token = input('Your raid dj needs a token: ')
     channel_id = int(input('Your raid dj needs channel id to join: '))
-    log_loc = input('Your raid dj needs a log file location (no need for quotes): ')
+    log_loc = input('Your raid dj needs path/to/WoWCombatLog.txt (no need for quotes): ')
     command = input('Your raid dj needs a command message to resume audio playback: ')
     debug = bool(input('Enable debug output? 0 = No, 1 = Yes: '))
 
@@ -45,44 +47,47 @@ file.close()
 
 client = discord.Client()
 
+spinner = itertools.cycle(['-', '/', '|', '\\'])
+
 async def my_background_task():
     await client.wait_until_ready()
     while not client.is_closed():
-        log_events = []
+        print("The bot is ready!")
         
+        log_events = []
+    
         while 1:
-            
+        
             for line in Pygtail(filename=log_loc,
                                 read_from_end=True):
                 if ("ENCOUNTER_START" in line):
                     log_events.append(["ENCOUNTER_START", line, time.time()])
-                    print('found encounter start')
+                    if debug: print('found encounter start')
                 elif ("ENCOUNTER_END" in line):
                     log_events.append(["ENCOUNTER_END", line, time.time()])
-                    print('found encounter end')
-            
+                    if debug: print('found encounter end')
+        
             if log_events:
                 check_time = time.time()
                 if (check_time - log_events[-1][2]) > 2:
+                    if int(log_events[-1][1][-2]) == 0:
+                        await client.get_channel(channel_id).send("You wiped :(")
+                    else:
+                        await client.get_channel(channel_id).send("You did the thing! :D")
+                
                     await client.get_channel(channel_id).send(str(command))
                     if debug:
                         await client.get_channel(channel_id).send(str(log_events))
                     log_events = []
                 else:
-                    print('found event, but not waiting long enough '+str(check_time)+' '+str(log_events[-1][2]))
+                    if debug: print('found event, but not waiting long enough '+str(check_time)+' '+str(log_events[-1][2]))
             else:
-                print('no log event found')
-            
+                if debug: sys.stdout.write('\r' + "waiting for log event " + next(spinner))
+        
             time.sleep(1)
-
-@client.event
-async def on_message(message):
-    print("message seen")
-
-@client.event
-async def on_ready():
-    print("The bot is ready!")
-    await client.change_presence(activity=discord.Game(name="The Waiting Game"))
 
 client.loop.create_task(my_background_task())
 client.run(token)
+
+# for reference here is an "encounter end" log entry
+# '7/26 23:39:14.320  ENCOUNTER_END,651,"Magtheridon",4,25,0\n'
