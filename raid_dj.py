@@ -3,6 +3,15 @@ import time
 import os
 import discord
 import asyncio
+import time
+
+import raid_dj_defaults
+
+if not raid_dj_defaults.token:
+
+
+
+
 
 client = discord.Client()
 
@@ -12,40 +21,30 @@ client = discord.Client()
 async def my_background_task():
     await client.wait_until_ready()
     while not client.is_closed():
+        log_events = []
+        
         while 1:
             
-            with open("C:\Program Files (x86)\World of Warcraft\_retail_\Logs\WoWCombatLog.txt") as fh:
-                last_event = None
-                
-                char = None
-                
-                
-                while "\n" not in char:
-                    fh.seek(-1,pos)
-                    char = fh.read(1)
-                
-                fh.seek(0, os.SEEK_END)
-                size = fh.tell()
-                block_size = min(size, 4096)
-                block_position = size - block_size
-                fh.seek(block_position, os.SEEK_SET)
-                
-                while block_position != 0:
-                    line_position = fh.tell()
-                    line = fh.readline()
-                    while line_position < (block_position - block_size):
-                        if ("ENCOUNTER_START" in line):
-                            last_event = ["ENCOUNTER_START", line]
-                        elif ("ENCOUNTER_END" in line):
-                            last_event = ["ENCOUNTER_END", line]
-                        line_position = fh.tell()
-                        line = fh.readline()
-                    
-                    if last_event:
-                        await client.get_channel(225860068661264394).send(str(last_event))
-                        await asyncio.sleep(1)  # task runs every 60 seconds
-                        await client.get_channel(225860068661264394).send(str(last_event))
-                        return
+            for line in Pygtail(filename="C:\Program Files (x86)\World of Warcraft\_retail_\Logs\WoWCombatLog.txt",
+                                read_from_end=True):
+                if ("ENCOUNTER_START" in line):
+                    log_events.append(["ENCOUNTER_START", line, time.time()])
+                    print('found encounter start')
+                elif ("ENCOUNTER_END" in line):
+                    log_events.append(["ENCOUNTER_END", line, time.time()])
+                    print('found encounter end')
+            
+            if log_events:
+                check_time = time.time()
+                if (check_time - log_events[-1][2]) > 2:
+                    await client.get_channel(604066168155799687).send(str(log_events))
+                    log_events = []
+                else:
+                    print('found event, but not waiting long enough '+str(check_time)+' '+str(log_events[-1][2]))
+            else:
+                print('no log event found')
+            
+            time.sleep(1)
 
 @client.event
 async def on_message(message):
@@ -57,4 +56,4 @@ async def on_ready():
     await client.change_presence(activity=discord.Game(name="The Waiting Game"))
 
 client.loop.create_task(my_background_task())
-client.run("NTU0MTU5OTg3MDM1ODY1MDg5.D2YnuQ.W_aqR4MijleEMgwFPzmHL9LEjcY")
+client.run('NTU0MTU5OTg3MDM1ODY1MDg5.XTvcyg.Fzt_geDx2qE2DsenLLlc9GC_GY8')
