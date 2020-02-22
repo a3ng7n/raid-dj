@@ -1,4 +1,4 @@
-from pygtail import Pygtail
+import tailhead
 import time
 import os
 import sys
@@ -53,41 +53,33 @@ async def my_background_task():
     await client.wait_until_ready()
     while not client.is_closed():
         print("The bot is ready!")
-        
-        log_events = []
     
         while 1:
-        
-            for line in Pygtail(filename=log_loc,
-                                read_from_end=True):
-                if ("ENCOUNTER_START" in line):
-                    log_events.append(["ENCOUNTER_START", line, time.time()])
-                    if debug: print('found encounter start')
-                elif ("ENCOUNTER_END" in line):
-                    log_events.append(["ENCOUNTER_END", line, time.time()])
-                    if debug: print('found encounter end')
-        
-            if log_events:
-                check_time = time.time()
-                if (check_time - log_events[-1][2]) > 2:
-                    if int(log_events[-1][1][-2]) == 0:
-                        await client.get_channel(channel_id).send("You wiped :(")
-                    else:
-                        await client.get_channel(channel_id).send("You did the thing! :D")
-                
-                    await client.get_channel(channel_id).send(str(command))
-                    if debug:
-                        await client.get_channel(channel_id).send(str(log_events))
-                    log_events = []
+            for line in tailhead.follow_path(log_loc):
+                if line is not None:
+                    if ("ENCOUNTER_START" in line):
+                        if debug: print('\rfound encounter start: ' + line)
+                    elif ("ENCOUNTER_END" in line):
+                        if debug: print('\rfound encounter end: ' + line)
+
+                        if int(line[-1]) == 0:
+                            await client.get_channel(channel_id).send("You wiped :(")
+                        else:
+                            await client.get_channel(channel_id).send("You did the thing! :D")
+
+                        await client.get_channel(channel_id).send(str(command))
+
+                        if debug:
+                            await client.get_channel(channel_id).send(line)
+                        
                 else:
-                    if debug: print('found event, but not waiting long enough '+str(check_time)+' '+str(log_events[-1][2]))
-            else:
-                if debug: sys.stdout.write('\r' + "waiting for log event " + next(spinner))
-        
-            time.sleep(1)
+                    if debug: sys.stdout.write('\r' + "waiting for log event " + next(spinner))
+                    time.sleep(1)
 
 client.loop.create_task(my_background_task())
 client.run(token)
 
 # for reference here is an "encounter end" log entry
 # '7/26 23:39:14.320  ENCOUNTER_END,651,"Magtheridon",4,25,0\n'
+# '2/21 22:06:27.449  ENCOUNTER_START,1853,"Nythendra",16,20,1520\n'
+# '2/21 22:06:41.548  ENCOUNTER_END,1853,"Nythendra",16,20,0\n'
